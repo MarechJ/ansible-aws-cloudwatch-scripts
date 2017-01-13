@@ -1,0 +1,47 @@
+---
+# Install package and amazon monitoring script
+# This requires an IAM user with proper right on you terraform scripts
+- set_fact:
+    is_Rhel: "{{ ansible_distribution == 'Red Hat Enterprise Linux' }}"
+    is_Ubuntu: "{{ ansible_distribution == 'Ubuntu' }}"
+    is_Centos: "{{ ansible_distribution == 'CentOS' }}"
+    is_redhat: "{{ ansible_os_family == 'RedHat' }}"
+    is_debian: "{{ ansible_os_family == 'Debian' }}"
+    is_suse: "{{ ansible_os_family == 'Suse' }}"
+
+- name: Cloudwatch Monitoring Install system dependencies
+  package: name={{ item.name }} state=present
+  when: item.active
+  with_items:
+    - { name: perl-Switch, active: "{{ is_redhat or is_suse }}" }
+    - { name: perl-DateTime, active: "{{ is_redhat or is_suse }}" }
+    - { name: perl-Sys-Syslog, active: "{{ is_redhat }}" }
+    - { name: perl-LWP-Protocol-https, active: "{{ is_redhat }}" }
+    - { name: perl-Digest-SHA, active: "{{ is_redhat }}" }
+    - { name: libwww-perl, active: "{{ is_debian }}" }
+    - { name: libdatetime-perl, active: "{{ is_debian }}" }
+# TODO add Suse deps and check with Debian
+
+- name: Download and unpack AWS scripts
+  unarchive:
+    copy: no
+    src: "http://aws-cloudwatch.s3.amazonaws.com/downloads/CloudWatchMonitoringScripts-1.2.1.zip"
+    remote_src: yes
+    dest: "{{ script_path }}/"
+
+- name: Set AWS credentials
+  copy:
+    content: |
+      AWSAccessKeyId={{ iam_monitoring_id }}
+      AWSSecretKey={{ iam_monitoring_secret }}
+    dest: "{{ script_path }}/aws-scripts-mon/awscreds.template"
+    group: root
+    owner: root
+    mode: 0600
+  when: stage != 'development'
+
+- name: Set metrics contab
+  cron:
+    name: AWS Cloudwatch metrics RAM, SWAP, DISK
+    job: "{{ script_path }}/aws-scripts-mon/mon-put-instance-data.pl --mem-avail --swap-used --disk-path=/ --disk-space-avail  --verbose --aws-credential-file={{ script_path }}/aws-scripts-mon/awscreds.template --from-cron"
+    backup: yes
