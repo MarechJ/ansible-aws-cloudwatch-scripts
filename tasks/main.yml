@@ -37,10 +37,10 @@
     group: root
     owner: root
     mode: 0600
-  when: stage != 'development'
 
 - name: Set metrics contab
   cron:
     name: AWS Cloudwatch metrics RAM, SWAP, DISK
     job: "{{ script_path }}/aws-scripts-mon/mon-put-instance-data.pl --mem-avail --swap-used --disk-path=/ --disk-space-avail  --verbose --aws-credential-file={{ script_path }}/aws-scripts-mon/awscreds.template --from-cron"
     backup: yes
+  become: true
